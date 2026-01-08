@@ -1,7 +1,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const QRCode = require("qrcode");
 
@@ -76,7 +76,7 @@ app.post("/transfer", auth, (req, res) => {
   const users = readUsers();
   const tx = readTx();
 
-  if (!users[to]) return res.status(400).send("Destino inválido");
+  if (!users[to]) return res.status(400).send("Destino invï¿½lido");
   if (users[req.user].balance < amount) return res.status(400).send("Saldo insuficiente");
 
   users[req.user].balance -= amount;
