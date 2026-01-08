@@ -1,113 +1,79 @@
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const bcrypt = require("bcryptjs");
+﻿const express = require("express");
 const jwt = require("jsonwebtoken");
-const QRCode = require("qrcode");
+const bcrypt = require("bcrypt");
+const cors = require("cors");
 
 const app = express();
+
+/* 🔑 MIDDLEWARES (ESTO ERA EL PROBLEMA) */
+app.use(cors());
 app.use(express.json());
 
-const PORT = 3001;
-const SECRET = "OVNI_SECRET_KEY";
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = "ovni_secret_key";
 
-const usersDir = path.join(__dirname, "users");
-const usersFile = path.join(usersDir, "users.json");
-const txFile = path.join(usersDir, "tx.json");
+/* 🧠 USUARIOS EN MEMORIA */
+const users = [];
 
-if (!fs.existsSync(usersDir)) fs.mkdirSync(usersDir);
-if (!fs.existsSync(usersFile)) fs.writeFileSync(usersFile, "{}");
-if (!fs.existsSync(txFile)) fs.writeFileSync(txFile, "[]");
-
-const readUsers = () => JSON.parse(fs.readFileSync(usersFile));
-const saveUsers = (data) => fs.writeFileSync(usersFile, JSON.stringify(data, null, 2));
-const readTx = () => JSON.parse(fs.readFileSync(txFile));
-const saveTx = (data) => fs.writeFileSync(txFile, JSON.stringify(data, null, 2));
-
-app.post("/register", async (req, res) => {
-  const { user, pass } = req.body;
-  if (!user || !pass) return res.status(400).send("Datos incompletos");
-
-  const users = readUsers();
-  if (users[user]) return res.status(400).send("Usuario existe");
-
-  const hash = await bcrypt.hash(pass, 10);
-
-  users[user] = {
-    pass: hash,
-    balance: 1000
-  };
-
-  saveUsers(users);
-  res.send("Usuario creado");
-});
-
-app.post("/login", async (req, res) => {
-  const { user, pass } = req.body;
-  const users = readUsers();
-
-  if (!users[user]) return res.status(401).send("No existe");
-
-  const ok = await bcrypt.compare(pass, users[user].pass);
-  if (!ok) return res.status(401).send("Clave incorrecta");
-
-  const token = jwt.sign({ user }, SECRET, { expiresIn: "1h" });
-  res.json({ token });
-});
-
-const auth = (req, res, next) => {
-  const token = req.headers.authorization;
-  if (!token) return res.sendStatus(401);
-  try {
-    req.user = jwt.verify(token, SECRET).user;
-    next();
-  } catch {
-    res.sendStatus(403);
-  }
-};
-
-app.get("/balance", auth, (req, res) => {
-  const users = readUsers();
-  res.json({ balance: users[req.user].balance });
-});
-
-app.post("/transfer", auth, (req, res) => {
-  const { to, amount } = req.body;
-  const users = readUsers();
-  const tx = readTx();
-
-  if (!users[to]) return res.status(400).send("Destino inv�lido");
-  if (users[req.user].balance < amount) return res.status(400).send("Saldo insuficiente");
-
-  users[req.user].balance -= amount;
-  users[to].balance += amount;
-
-  tx.push({
-    from: req.user,
-    to,
-    amount,
-    date: new Date().toISOString()
-  });
-
-  saveUsers(users);
-  saveTx(tx);
-  res.send("Transferencia OK");
-});
-
-app.get("/tx", auth, (req, res) => {
-  const tx = readTx().filter(t => t.from === req.user || t.to === req.user);
-  res.json(tx);
-});
-
-app.get("/qr", auth, async (req, res) => {
-  const qr = await QRCode.toDataURL(`OVNI:${req.user}`);
-  res.json({ qr });
-});
-
-app.listen(PORT, () => {
-  console.log(`?? OVNI Backend listo en http://localhost:${PORT}`);
-});
-
+/* =====================
+   HEALTH CHECK
+===================== */
 app.get("/", (req, res) => {
   res.send("OVNI backend ONLINE 🚀");
+});
+
+/* =====================
+   REGISTER
+===================== */
+app.post("/register", async (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).send("Datos incompletos");
+  }
+
+  const exists = users.find(u => u.email === email);
+  if (exists) {
+    return res.status(409).send("Usuario ya existe");
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  users.push({ email, password: hash, balance: 0 });
+
+  res.json({ ok: true, message: "Usuario registrado" });
+});
+
+/* =====================
+   LOGIN
+===================== */
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body || {};
+
+  const user = users.find(u => u.email === email);
+  if (!user) {
+    return res.status(401).send("Credenciales inválidas");
+  }
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
+    return res.status(401).send("Credenciales inválidas");
+  }
+
+  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
+
+  res.json({
+    ok: true,
+    token,
+    wallet: {
+      email,
+      balance: user.balance
+    }
+  });
+});
+
+/* =====================
+   START
+===================== */
+app.listen(PORT, () => {
+  console.log("Servidor escuchando en puerto", PORT);
 });
