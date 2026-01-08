@@ -107,3 +107,7 @@ app.get("/qr", auth, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`?? OVNI Backend listo en http://localhost:${PORT}`);
 });
+
+app.get("/", (req, res) => {
+  res.send("OVNI backend ONLINE 🚀");
+});
