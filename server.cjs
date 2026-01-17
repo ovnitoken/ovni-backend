@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || process.env.PORT || 3001;
 
 /* =====================
    MEMORIA (TEMPORAL)
@@ -218,3 +218,6 @@ app.listen(PORT, () => {
 
 
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' })
+})
